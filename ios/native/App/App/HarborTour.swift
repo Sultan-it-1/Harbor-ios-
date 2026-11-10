@@ -109,8 +109,8 @@ enum HarborTour {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + step.settle) { [weak web] in
             mark(String(format: "%02d-%@", i + 1, step.name))
-            // Time for the screenshot before the next screen.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            // Time for the screenshot before the next screen (the simulator can be slow to take it).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
                 guard let web else { return }
                 run(web, i + 1)
             }

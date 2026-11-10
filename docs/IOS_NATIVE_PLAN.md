@@ -47,6 +47,9 @@ Then: build, fix what the compiler finds, check every screen in the simulator, I
   the page (`window.__harborIosState`, src/lib/ios-system.ts) and the calls answer from it.
   Not like Android: a fresh link (relink) starts the file over; the screenshot block is a cover
   in the app switcher only.
-- [ ] **9. Build and test** (Actions from here on): compile, fix, simulator screenshots of every
-  screen in Arabic and English with real data, IPA.
-- [ ] **10. Move to Harbor-App.**
+- [x] **9. Build and test** (Actions from here on): compile, fix, simulator screenshots of every
+  screen in Arabic and English with real data, IPA. Test builds take `-HarborTour en|ar`
+  (ios/native/App/App/HarborTour.swift): the app opens each screen itself and the build takes a
+  screenshot of each; they're published with the IPA.
+- [ ] **10. Move to Harbor-App.** For now the iPhone app lives in its own public repository
+  (Harbor-ios-), so its builds use free Mac minutes.
