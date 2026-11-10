@@ -1,0 +1,92 @@
+import { useEffect, useState, useSyncExternalStore } from "react";
+import type { Meta } from "@/lib/cinemeta";
+import { getEpisodeProgress } from "@/lib/episode-progress";
+import { manualWatchedVersion, subscribeManualWatched } from "@/lib/manual-watched";
+import { loadSimklWatchedMap, simklWatchedForId, useSimklListVersion } from "@/lib/simkl/list-status";
+import { useSimkl } from "@/lib/simkl/provider";
+import { resolveMeta } from "@/lib/meta-resource";
+import { libraryGetOne } from "@/lib/stremio";
+import { decodeWatchedEpisodes } from "@/lib/stremio-watched";
+import { fetchWatchedKeySet } from "@/lib/trakt/history";
+import { useTraktShowWatched } from "@/lib/trakt/use-show-watched";
+import { useTrakt } from "@/lib/trakt/provider";
+import type { PlayEpisode } from "@/lib/view";
+
+export function usePlayerWatched(params: {
+  meta: Meta;
+  authKey: string | null;
+  imdbId: string | null;
+  enabled: boolean;
+}): { watchedFor: (ep: PlayEpisode) => boolean } {
+  const { meta, authKey, imdbId, enabled } = params;
+  const { isConnected: traktConnected } = useTrakt();
+  const { isConnected: simklConnected } = useSimkl();
+  useSyncExternalStore(subscribeManualWatched, manualWatchedVersion);
+  const [traktWatchedAll, setTraktWatched] = useState<Set<string>>(() => new Set());
+  // This show's every watched episode on Trakt, with the account-wide set.
+  const traktWatched = useTraktShowWatched(traktWatchedAll, enabled && traktConnected, meta.id, imdbId);
+  const [simklWatched, setSimklWatched] = useState<Set<string>>(() => new Set());
+  // Bumped when Simkl's list was read again with something new (watched elsewhere).
+  const simklVersion = useSimklListVersion();
+  const [stremioWatched, setStremioWatched] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!enabled || !traktConnected) return;
+    let cancelled = false;
+    fetchWatchedKeySet()
+      .then((s) => {
+        if (!cancelled) setTraktWatched(s);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, traktConnected, meta.id]);
+
+  useEffect(() => {
+    if (!enabled || !simklConnected) return;
+    let cancelled = false;
+    loadSimklWatchedMap()
+      .then((m) => {
+        if (!cancelled) setSimklWatched(simklWatchedForId(m, imdbId, meta.id));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, simklConnected, meta.id, imdbId, simklVersion]);
+
+  useEffect(() => {
+    if (!enabled || !authKey) return;
+    let cancelled = false;
+    void (async () => {
+      const item = await libraryGetOne(authKey, meta.id).catch(() => null);
+      const watched = item?.state?.watched;
+      if (!watched || cancelled) return;
+      const full = await resolveMeta(authKey, "series", meta.id).catch(() => null);
+      const keys = await decodeWatchedEpisodes(watched, full?.videos);
+      if (!cancelled) setStremioWatched(keys);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, authKey, meta.id]);
+
+  const imdbKey = meta.id.startsWith("tt") ? meta.id : imdbId;
+  const watchedFor = (ep: PlayEpisode): boolean =>
+    getEpisodeProgress(
+      meta.id,
+      ep.season,
+      ep.episode,
+      null,
+      imdbKey,
+      traktWatched,
+      stremioWatched,
+      simklWatched,
+      undefined,
+      undefined,
+      meta.id,
+    ).watched;
+
+  return { watchedFor };
+}
